@@ -1,0 +1,304 @@
+---
+title: "A quick introduction to the tidyverse (well, mainly dplyr)"
+author: "Adrian A. Castellanos"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, warning = F, message = F, results = "hide", eval = F}
+#packages <- c("tidyverse", "magrittr", "reshape2")
+for(i in 1:length(packages)) if(!require(packages[i], character.only = T)) #install.packages(packages[i]); library(packages[i], character.only = T)
+```
+
+```{r, warning = F, message = F, results = "hide"}
+#install.packages("tidyverse")
+#install.packages("reshape2")
+library(tidyverse)
+library(magrittr)
+library(reshape2)
+```
+
+# `tidyverse`
+
+For this module, we will be taking a short, introductory dive into the tidyverse series of packages, with the goal of showing you what possibilities exist for manipulating and cleaning data.
+
+Since we can't manipulate data without data, we'll start there. 
+
+For the purposes of working with packages that are supposed to help us deal with messy, disorganized data, we'll be using biodiversity occurrence data.
+
+```{r}
+OCC <- read.csv("https://raw.githubusercontent.com/acastellanos39/OSOS2019/master/tex_mammals.csv", header = T)
+```
+
+This is data for all mammal records on [GBIF](https://www.gbif.org/) from Texas with coordinate data. It turns out there are quite a few records and they have a lot of (potential) information associated with them. 
+```{r, eval = F}
+dim(OCC)
+head(OCC)
+str(OCC)
+summary(OCC)
+```
+
+Take a look at these data and get a feeling for the quantity, classes, what may interest us, and things like NAs or data that may not be useful.
+
+## `magrittr`
+
+Before we start cleaning up our data, I want to introduce the concept of a pipe in R via the `magrittr` package. A pipe is executed by the `%>%` symbol (command + shift + m on Macs if you don't want to type it out). 
+
+```{r, warning = F}
+OCC %>% select(1:5) %>% head
+```
+
+A pipe works by taking something from the left and making it the first argument for something on the right. In this case, we take our data.frame (typically we enter some sort of data in at the beginning) and place it as the first argument in a `dplyr::select` function (check `?dplyr::select` to see what the first argument is, but we'll talk about this later). The real utility of a pipe comes in later by taking the result of our `dplyr::select` function (the first five columns of our data.frame) and putting *that* as the first argument of our head function. 
+
+There are also other pipe symbols other than `%>%` that you can use
+
+```{r}
+OCC %$% decimalLatitude %>% max
+```
+
+The `%$%` symbol acts like the `$` in indexing by essentially doing `OCC$decimalLatitude` but keeping it within the pipeline ecosystem (may be more helpful further down in a plot).
+
+```{r}
+alt <- OCC %>% select(species, coordinateUncertaintyInMeters)
+nrow(alt)
+alt %<>% dplyr::filter(coordinateUncertaintyInMeters <= 5000)
+nrow(alt)
+```
+
+The `%<>%` is for those of us too lazy to come up with new object names and uses the object to the left as both the primary data source for the pipe and the name of the object created at the end of the pipe. **Don't use this unless you are sure it won't spit out a NULL result or something else you don't want**
+
+## `dplyr`
+
+We will start out and spend a good portion of our time working with the `dplyr` package for data manipulation and cleanup.
+
+We will focus on a series of helpful functions, how they work, and then look at things like `group_by` can be used with them.
+
+It should be noted that the first argument of all `dplyr` functions is `data = `, which means that it is designed to work well with pipes if so desired. 
+
+### `select`
+
+`dplyr::select` is a helpful function that lets you select the columns that you want in a variety of ways.
+
+We have a lot of data in our `OCC` data.frame object, but we don't need most of it, so let's only grab a bit of it to work with downstream. 
+
+`dplyr::select` works by either giving it a group of numbers (akin to indexing by `DATA[, 1:5]` or `DATA[, c(1:2, 5)]`) or column names (akin to `DATA[, "key"]` or `DATA[, c("key", "scientificName")]`)
+
+```{r}
+colnames(OCC)
+select(OCC, 1:5) %>% head
+OCC %>% select(1:5) %>% head
+OCC %>% select(key, scientificName, decimalLatitude, decimalLongitude, issues) %>% head
+```
+
+There are a lot of columns that contain useful information important to us, so we'll select by column number
+
+```{r}
+DATA <- OCC %>% select(4, 3, 32, 5, 16, 29:30, 38, 40, 59, 66, 68, 82, 85, 92, 97)
+dim(DATA)
+head(DATA)
+```
+
+BUT that's not all, we still have a lot more that we can do with `dplyr::select` and its variants. You can select based on certain parameters
+
+```{r}
+OCC %>% select(starts_with("decimal")) %>% head
+OCC %>% select(ends_with("Name")) %>% head
+```
+
+the `starts_with` and `ends_with` arguments select columns based on their name
+
+```{r, warning = F}
+DATA %>% select_all(toupper) %>% head 
+```
+
+`dplyr::select_all` is a special case of `dplyr::select` (labeled by tidyverse developers as a scoped variant along with `select_if` and `select_at`) that selects all columns and applies an additional function (here `base::toupper` which capitalizes all the column names)
+
+```{r}
+DATA %>% select(lon = 1, lat = decimalLatitude) %>% head
+DATA %>% rename(lon = decimalLongitude, lat = decimalLatitude) %>% head
+```
+
+You can use the `dplyr::select` function to rename each variable if you want (by column number or column name) OR you can use the `dplyr::rename` function (which keeps all of the variables)
+
+### `filter`
+
+The `dplyr::filter` function does what it sounds and filters your data based on the arguments you give it. 
+
+```{r}
+dim(DATA)
+DATA %>% filter(year >= 2000) %>% dim #grabs only records from 2000 on
+DATA %>% filter(year >= 2000 & order == "Rodentia") %>% dim #grabs only *rodent* records from 2000 on
+#DATA %>% filter(year >= 2000, order == "Rodentia") is the same thing as the above line
+DATA %>% filter(year >= 2000 | order == "Rodentia") %>% dim #grabs records that are *either* rodents or from the year 2000 on
+```
+
+You can use the `&` symbol to string along multiple arguments to filter by or use the `|` symbol to give possible options
+
+This is equivalent to using `DATA[DATA$year >= 2000, ]`, `DATA[DATA$year >= 2000 & DATA$order == "Rodentia", ]`, etc. Depending on your coding familiarity, one or the other may feel cleaner or more useful for you.
+
+You can also apply functions to determine cutoffs for your filtering arguments.
+```{r}
+median(DATA$year, na.rm = T)
+DATA %>% filter(year > median(year, na.rm = T)) %>% dim
+#DATA %>% filter(year > 1977) %>% dim
+```
+
+Which will lead us into the concept of groups!
+
+### `group_by`
+`group_by` is useful for partitioning things and applying functions to these various partitions. 
+
+For the last example, we applied a threshold to the median year of all records. What if we wanted to apply it differently to each order and apply a median threshold for each one?
+
+```{r, warning = F}
+ORD <- DATA %>% group_by(order)
+ORD
+```
+
+The argument in the `dplyr::group_by` function represents what you want to group with. Each of the different levels in the specified column will be their own group. Check out `levels(DATA$order)` to see what groups there are.
+
+What it results in is a tibble which is the preferred object class for the tidyverse (as part of the `tibble` package) and somehow not a Gremlins or Furby knockoff. A tibble holds data in a similar way but presents it differently by showing dimensions, a few columns, the classes in the tibble, and groups if they exist. 
+
+Often when working with larger data.frames (say in the 100,000 or 1,000,000 rows + range), it can destroy your computer by simply calling the object.
+
+You can also choose multiple grouping variables
+```{r}
+DATA %>% group_by(institutionCode, basisOfRecord) #each group is a specific combination of institution and record type
+```
+
+```{r}
+ORD %>% filter(year > median(year, na.rm = T)) # slightly different result than before
+#sapply(levels(DATA$order), function(x) DATA %>% filter(order == x) %$% year %>% median(na.rm = T)) #this also means that we have fossil dermopterans in Texas?!
+```
+
+For something perhaps a bit more useful, if you wanted to get rid of duplicated locality records within an order, how do you do that?
+
+```{r}
+#DATA %>% select(1, 2) %>% duplicated() %>% `!` %>% sum
+#DATA %>% distinct(decimalLongitude, decimalLatitude) %>% dim
+ORD %>% distinct(decimalLongitude, decimalLatitude, .keep_all = T) %>% ungroup
+```
+
+Here, we use the `dplyr::distinct` function to only grab those rows that are distinct according to what we give it (longitude and latitude) and use the `.keep_all = T` argument to specify that we want all other columns as well. Try it without .keep_all and see what happens
+
+If you don't like the look of the tibble result, you can always end with `%>% as.data.frame` or turn it into a data.frame later with the `base::as.data.frame` function.
+
+### `mutate`
+
+The `dplyr::mutate` function also works how it sounds by either replacing or frankensteining a new column.
+
+Often a specimen in a natural history collection (much of what is found in GBIF are natural history collection specimens) has an associated collection number (some institution code followed by a number, such as TCWC 6524)
+
+```{r}
+DATA %>% mutate(mus.num = paste(institutionCode, catalogNumber, sep = "_")) %>% head
+```
+
+You can create multiple columns in the same function call. I would also recommend always naming the new column by using `column.name = ` before the mutate specific argument for the new column. You probably aren't a being of pure chaos and want columns names `year + 4` and `log(year)`.
+```{r}
+DATA %>% mutate(year.2 = year + 4, year.3 = log(year)) %>% head
+```
+
+### summarize
+
+The `dplyr::summarize` function again follows the obvious naming trend and *gasp* summarizes your data. This is yet another of the common `dplyr` functions that works really well when using `group_by` to summarize multiple groups. 
+
+```{r}
+DATA %>% summarize(n.spec = n_distinct(species))
+DATA %>% summarize(min = min(year, na.rm = T), max = max(year, na.rm = T), mean = mean(year, na.rm = T))
+```
+
+You can summarize for one function or for multiple ones, and you can either name the results or *live dangerously* and let it be named after the function. Instead of the potentially useful `n.spec`, you can have the *mysterious* `n_distinct(species)`! *Swoon*
+
+`dplyr::summarize` is only as good as the functions you use with it. Some useful ones are typically the usual `mean`, `median`, `min`, `max`, `quantile`, `n` (for numbers of records), `n_distinct` for (unique numbers of records as shown above), etc.
+
+```{r}
+DATA %>% group_by(order) %>% summarize(n = n(), n.spec = n_distinct(species))
+#Often the real power of dplyr is in how you string multiple of these functions together
+DATA %>% group_by(order) %>% summarize(n = n(), n.spec = n_distinct(species)) %>% mutate(speciesPerRecords = n.spec/n)
+DATA %>% group_by(institutionCode) %>% summarize(nspec = n_distinct(species), nfam = n_distinct(family), norder = n_distinct(order))
+```
+
+## `tidyr`
+
+Another `tidyverse` package that is often useful is `tidyr` specifically for its data manipulation functions that can turn wide data into long data and long data into wide data.
+
+I know, I know. What are wide/long data and why do **I** need to know them???
+
+As we've learned, most things are essentially named how they are, so wide data are column heavy and long data have more rows. It is often essential to know how to switch between them for plotting reasons. 
+
+```{r}
+ORD <- DATA %>% group_by(order) %>% summarize(nspec = n_distinct(species), nfam = n_distinct(family))
+```
+
+Take the above result for example. How could you plot this? You'd need an x variable (order), but what is our y variable? In a long data.frame, our y variable will be a vector of factors that has levels that tell the difference between the number of species and number of families. And additional column called value will be used as a color or fill variable. 
+
+A non tidyverse method of doing this is found in the `reshape2` package using the `reshape2::melt` and `reshape2::cast` functions.
+
+```{r, fig.width = 3.6, fig.height = 6}
+melt(ORD, id.vars = "order") #id.vars says what will be used as an ID (typically factors)
+melt(ORD, "order") %>% ggplot(aes(x = variable, y = order, fill = value)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = value), color = "white") + 
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_y_discrete(expand = c(0, 0)) +
+  scale_fill_viridis_c("Number")
+```
+
+```{r}
+dcast(melt(ORD, id.vars = "order"), order ~ variable)
+```
+
+For a `reshape2::dcast` function (the d standing for data.frame, obviously, because why stop at putting an r in front of all your package and function names), you must specify a formula of `x ~ y` where the `y` is the variable that is broken up into columns.
+
+### `gather and spread`
+
+Now that you have an idea of what wide/long data are and the `reshape2` package (it is often shamefully joked that everyone still uses `reshape2` because `melt` and `cast` make more sense), let's see how `tidyr` approaches these. 
+
+```{r}
+ORD %>% gather(key = "var", value = "val", -order)
+```
+
+It's a little bit more roundabout to get to the same result using `tidyr`. The same basic idea applies by giving a key variable and a value variable, but it is harder for them to talk to each other and still keep the order column. 
+
+```{r}
+ORD %>% gather(order)
+```
+
+`tidyr::spread` is equivalent to the `reshape2::cast` functions and does the opposite of `tidyr::gather` (as the name yet again suggests)
+
+```{r}
+EXP <- data.frame(order = rep(levels(DATA$order), 3), institution = rep(c("TCWC", "KU", "UMMZ"), each = 16), val = sample(1:50, 48, replace = T))
+head(EXP, 25)
+```
+
+Above we made a random example to use `tidyr::spread` on that is comprised of 18 mammalian orders, three institution codes, and random values from 1 to 50 for each order in each institution. 
+
+```{r}
+EXP %>% spread(key = "institution", val = "val")
+EXP %>% spread(key = "order", val = "val")
+```
+
+Depending on how you choose your key (the column that is spread out with its factors now being columns) and val (the numeric association with the key variable) arguments, you can get very different data.frames.
+
+However, it is possibly easier to connect this with the `reshape2::melt` and `tidyr::gather` functions than the different formula syntax of the `reshape2` cast functions. 
+
+### `separate`
+
+Separate is another function that may be useful when you want to *separate* data held in a single column
+
+```{r}
+DATA %>% separate(species, c("genus", "specep")) %>% head
+```
+
+This can be useful for certain things like dates (although there is the [`lubridate` package](https://lubridate.tidyverse.org/) as part of the tidyverse for y'all that are temporally inclined), those pesky museum numbers, or simple text analysis.
+
+Overall, hopefully this has at least shown you some functions that may be useful for cleaning up and organizing your own data (no more going into Excel and fighting with its formatting!).
+
+As always, more information about specific functions can be found by viewing the help pages in R. Additional questions about tidyverse questions can be found on the thorough [website](https://www.tidyverse.org/). And general "how do I do something ill advised", "how do I break this", or "how do I do this in the most complex manner possible" questions can find answers on StackExchange. Be sure to always read through the comments and most of the answers (the most highly voted answer is often not the most relevant one to you). 
