@@ -1,0 +1,441 @@
+---
+title: "A quick introduction to ggplot2"
+author: "Adrian A. Castellanos"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, warning = F, message = F, results = "hide", eval = F}
+packages <- c("ggplot2", "cowplot", "gghighlight", "raster", "tidyverse", "RColorBrewer", "sf", "gganimate", "gifski")
+for(i in 1:length(packages)) if(!require(packages[i], character.only = T)) install.packages(packages[i]); library(packages[i], character.only = T)
+```
+
+```{r, warning = F, message = F, results = "hide"}
+#install.packages("tidyverse")
+#install.packages("cowplot")
+#install.packages("gghighlight")
+#install.packages("raster")
+#install.packages("RColorBrewer")
+#install.packages("sf")
+#install.packages("gganimate")
+#install.packages("gifski")
+#install.packages("rgeos")
+#install.packages("png")
+library(tidyverse)
+library(gghighlight)
+library(raster)
+library(sf)
+library(RColorBrewer)
+library(gganimate)
+library(gifski)
+```
+
+Congrats on ~~getting lost and ending up here~~ signing up and attending this workshop! The goal of this module is to give you a greater familiarity with the `ggplot2` package. You aren't going to be able to create beautiful, complicated monstrosities after this (that takes messing up repeatedly and a grotesque sense of aesthetics), but you will hopefully understand how `ggplot2` works and how to start on your reproducible plotting adventure. 
+
+# Visualization with `ggplot2`
+The first step in plotting anything is to grab the data that we want to/have to plot. 
+```{r}
+DATA <- read.csv("https://raw.githubusercontent.com/acastellanos39/OSOS2019/master/tick_osos.csv", header = T)
+```
+
+TICKS!!!
+As a reference, I typically like naming my objects in all caps and with 4 or 5 characters to keep things easy to type (and make sure objects and functions are separate).
+This is a streamlined and whirlpooled dataset from a study looking at interactions among ticks, small mammals, and fire ants (**Decreased small mammal and on-host tick abundance in association with invasive red imported fire ants (*Solenopsis invicta*)**, Castellanos et al. 2016).
+
+It is generally always good practice to take a look at your data beforehand to see what you are dealing with (check dimensions, see what the first few rows look like, and check out a summary of the data and what class each column is).
+
+```{r}
+dim(DATA)
+head(DATA)
+summary(DATA)
+```
+
+Each row is a mammal that was processed for ticks.
+
+## Step 1: What kind of plot do you want?
+
+`ggplot2` has two general functions to plot: `ggplot2::qplot` and `ggplot2::ggplot`
+
+```{r, fig.width = 5, fig.height = 5}
+plot(DATA$sciname, DATA$weight)
+```
+
+This is using the `base::plot` function. 
+
+```{r, warning = F, fig.width = 5, fig.height = 5}
+qplot(data = DATA, x = sciname, y = weight, geom = "boxplot")
+```
+
+`ggplot2::qplot` is ggplot2's version of a quick plot, hence the name, coding denizens are lazy (see: every package that begins with "r"). You specify the data.frame (`data = `), the x axis (`x = `), the y axis (`y = `), and the type of plot you want (`geom = `). Keep in mind this general syntax however...
+
+`ggplot2::qplot` is basically for those who `base` insulted multiple generations of their family
+
+You, however, are presumably here not as a Korean revenge drama protagonist but to learn how to mess with a plot in every way possible!
+
+A quick note. ggplot2 only really likes data.frames. Don't give the data argument a matrix and cry when it spits out a totally non nebulous error.
+
+## Step 2: What even is a ggplot?
+
+Now let's introduce `ggplot2::ggplot` step by step
+```{r, warning = F, fig.width = 5, fig.height = 5}
+PLT <- ggplot(data = DATA)
+PLT #Nothing! Fret not, you didn't break anything (yet)
+class(PLT) #as you can see, our object is class gg and ggplot (whatever that means)
+attributes(PLT) #Right now, only data is filled with something that doesn't read like cyberpunk
+```
+
+One of the four main functions I will introduce today is `ggplot2::ggplot`. Its main purpose is to create an object of the class gg (no affiliation to the Canadian comic artist).
+
+By only inserting data, we get a blank canvas. Looking at attributes will show you everything that goes into making our plot (try looking at `PLT$data` if you don't believe me).
+
+`ggplot2` works as a series of layers (no onion jokes, please), essentially the `ggplot2::ggplot` function is just creating the canvas the layers will go on
+
+```{r, fig.width = 5, fig.height = 5}
+PLT <- ggplot(data = DATA, aes(x = sciname, y = weight)) +
+  geom_boxplot()
+PLT
+```
+
+So what did we actually do?
+Our two additions are the `ggplot2::aes` function and the `ggplot2::geom_xxx` function (major functions 2 and 3 that we will talk about today)
+`ggplot2::aes` sets the aesthetic values (x axis, y axis, shape, color, fill, grouping, etc.) for the plot or layer. 
+*Why or???* If set in the ggplot function, aes applies to all layers, while in a geom_xxx function it applies to just that one.
+The geom_xxx function applies a layer (don't believe me? check `PLT$layers`)
+
+```{r, fig.width = 5, fig.height = 5}
+PLT <- ggplot(data = DATA, aes(x = sciname, y = weight)) +
+  geom_boxplot() +
+  geom_point()
+PLT$layers
+```
+
+The layers are kept as a list object with the various properties of each as set by the arguments (many of the ones listed here are defaults)
+
+### `aes`
+
+`ggplot2::aes` is how you set things like color/fill 
+
+Color/fill can do two things: 
+1) add a splash of color to your plots (can be good or bad, depending on how devious you are)
+2) differentiate between groups/create groupings in your plot
+We will use it for the second reason here (but changing `color = "magenta2"` would work if you want the first)
+
+```{r, fig.width = 6, fig.height = 5}
+ggplot(data = DATA, aes(x = sciname, y = weight, color = treatment)) +
+  geom_boxplot() +
+  geom_point() #color applied to all layers
+
+ggplot(data = DATA, aes(x = sciname, y = weight)) +
+  geom_boxplot(aes(color = treatment)) +
+  geom_point() #color applied to boxplots
+
+ggplot(data = DATA, aes(x = sciname, y = weight, fill = treatment)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(shape = 21) #fill applied to all layers
+#check what this looks like without the `shape = 21` argument
+```
+
+An argument in the `ggplot2::aes` function in `ggplot` applies to *all layers* (unless taken out explicitly using `inherit.aes = F` in a geom_xxx function), while one in a geom_xxx function only applies to **that layer**.
+
+By switching when a `geom_xxx` is called in our script, we can determine plotting order. 
+```{r, fig.width = 6, fig.height = 5}
+ggplot(data = DATA, aes(x = sciname, y = weight, fill = treatment)) +
+  geom_jitter(shape = 21) +
+  geom_boxplot() #geom_jitter is geom_point with a jitter position added to the points
+```
+
+If you need to add some degree of transparency, adding an alpha value (1 is solid, 0 is completely transparent) can be useful and can even be scaled according to something like uncertainty values. 
+
+```{r, fig.width = 6, fig.height = 5}
+ggplot(data = DATA, aes(x = sciname, y = weight, fill = treatment)) +
+  geom_jitter(shape = 21) +
+  geom_boxplot(alpha = 0.3, outlier.shape = NA)
+```
+
+One important side note that is important to consider when plotting different groups/treatments is the `position` argument.
+
+```{r, fig.width = 6, fig.height = 5}
+PLT <- ggplot(data = DATA, aes(x = sciname, y = weight, fill = treatment)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(shape = 21)
+PLT$layers
+```
+
+You can see that `position_dodge2` is shown for the boxplot layer and `position_identity` is shown for the point layer. Do these match up?
+
+By specifying a position argument in the points layer, we can supply a function (this is something I always have to look up) that applies a position (e.g., `position_jitterdodge`, `position_dodge2`, `position_jitter`)
+
+```{r, fig.width = 6, fig.height = 5}
+PLT <- ggplot(data = DATA, aes(x = sciname, y = weight, fill = treatment)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(shape = 21, position = position_jitterdodge())
+PLT$layers
+PLT
+```
+
+## Step 3: But I don't like my axes and scales!!! 
+
+`ggplot2` takes information for the axes used from the data given to it. 
+
+For example, our x-axis in `PLT` is named sciname and the ticks are represented by the level names used since it is a factor. The y-axis is the range of values seen (because numeric) and the legend title is represented by what we gave it. Having a plot with "sciname" is likely not great for publication or presentation.
+
+And thus, I introduce the wonderful world of the `scale_xxx_xxx` functions because if options were money, we'd all have living wages now.
+
+```{r, fig.width = 6, fig.height = 5}
+PLT +
+  scale_fill_discrete(name = "Treatment", limits = c("Untreated", "Treated"))
+#we have discrete fill values ("Treated" vs. "Untreated") so this is used over a continuous scale
+PLT +
+  scale_fill_manual(name = "Treatment", limits = c("Untreated", "Treated"), values = c("grey40", "white"))
+#want ulitmate control? Use manual
+```
+
+The first series of xxx's in scale_xxx_xxx represent what scale you are messing with (e.g., x, y, fill, color, shape, alpha, etc.) and the second series of xxx's represents what type of data (e.g., continuous often for numerical data, discrete for categorical, manual for fans of the toxic boyfriend in MIDSOMMAR).
+
+```{r, fig.width = 6, fig.height = 5}
+PLT +
+  scale_x_discrete(name = "Species", limits = rev(levels(DATA$sciname)))
+#limits refers to the order of something
+PLT <- PLT +
+  scale_x_discrete(name = "Species", limits = rev(levels(DATA$sciname)), labels = c("S. hispidus", "R. fulvescens", "P. leucopus", "C. hispidus", "B. taylori"))
+PLT
+PLT +
+  scale_y_continuous(name = "Weight (g)", limits = c(0, 240), breaks = seq(0, 240, 40))
+```
+
+Here, we see a few important arguments for the `scale_xxx_xxx` functions:
+  1) `name` - changes the title of the axis/legend 
+  2) `limits` - sets the order of things (for a categorical scale, ALL values must    be named, a numerical scale takes a vector of 2 elements - the min and the max)
+  3) `labels` - what do you want the values to be shown as
+  4) `breaks` - for a numerical scale, how often do you want to see the axis ticks    (for this, I often use the `base::seq` function to make a sequence from min to max   by a certain value)
+  
+### Options when changing colors/fills
+
+Choosing colors is an incredibly important part of creating a figure. Colorblind friendly color schemes should be the norm (don't be a monster and use red and green only) and there's a lot of options available that make this easier. 
+
+The `RColorBrewer` package allows you to grab color palettes for a variety of scenarios easily. `brewer.pal.info` is an object that tells you all the palettes available in `RColorBrewer`. `display.brewer.all` displays palettes that match our desired qualifications (n for number of colors, type for what type of plot [diverging, qualitative, sequential, etc.], and colorblindFriendly for the obvious).
+
+```{r, warning = F, fig.width = 6, fig.height = 5}
+brewer.pal.info #we want a qualitative palette that is colorblind
+display.brewer.all(2, "qual", colorblindFriendly = T)
+COLS <- brewer.pal(3, "Dark2")
+COLS
+COLS <- COLS[1:2]
+PLT +
+  scale_fill_manual(name = "Treatment", values = COLS)
+```
+
+We also have the viridis and cividis (github exclusive **airhorn noise** for now, I believe) color schemes that you may have seen used with spatial data. 
+
+```{r, fig.width = 6, fig.height = 5}
+PLT +
+  scale_fill_viridis_d(name = "Treatment")
+```
+
+Here, there is an added bit to the scale function we are familiar with. We add a "c" for continuous data and a "d" for use with discrete data.
+
+For a continuous example, let's create a heatmap of species occurences using `geom_tile`
+
+```{r, fig.width = 6, fig.height = 5}
+TAB <- data.frame(table(DATA$sciname, DATA$transect)) #create a table using `base::table` and take advantage of how data.frame mangles this for easy plotting
+ggplot(data = TAB, aes(x = Var1, y = Var2, fill = Freq)) + 
+  geom_tile(color = "white", size = 1) +
+  scale_fill_viridis_c(name = "Count") +
+  geom_text(aes(label = Freq), color = "grey70", fontface = "bold", size = 5)
+  #notice the use of geom_text to add the actual counts of each combination and the the fontface argument to bold the text
+```
+
+One last bit about scales that may be useful is creating a beautiful scale bar
+
+```{r, fig.width = 7, fig.height = 5}
+ggplot(data = TAB, aes(x = Var1, y = Var2, fill = Freq)) + 
+  geom_tile(color = "white", size = 1) +
+  scale_fill_viridis_c(name = "Count") +
+  geom_text(aes(label = Freq), color = "grey70", fontface = "bold", size = 5) +
+  guides(fill = guide_colorbar(ticks = F, barwidth = 8, barheight = 1.5, title.position = "top", direction = "horizontal"))
+```
+
+The `ggplot2::guides` function allows you to adjust different aspects of the legend, including whether or not you have ticks for each break (`ticks`), bar dimensions (`barwidth` and `barheight`), title position (`title.position`) and bar direction (`direction`, note that if you want this to be vertical also switch the values for `barwidth` and `barheight`).
+
+BUT this legend placement looks weird, which leads us to the last function
+
+## Step 4: Let's all head down the `theme` stormdrain 
+
+The `ggplot2::theme` function is the last of the major functions I'm going to harp on, and the one that leads to the most tinkering.
+
+Most minor changes to a plot, its axes, the legend, etc. are confined to the `ggplot2::theme` function. Go look at [theme reference](http://ggplot2.tidyverse.org/reference/theme.html) and weep internally at the all of the arguments listed for the function.
+
+```{r, fig.width = 5, fig.height = 5}
+TPLT <- ggplot(data = TAB, aes(x = Var1, y = Var2, fill = Freq)) + 
+  geom_tile(color = "white", size = 1) +
+  scale_fill_viridis_c(name = "Count") +
+  geom_text(aes(label = Freq), color = "grey70", fontface = "bold", size = 5) +
+  guides(fill = guide_colorbar(ticks = F, barwidth = 16, barheight = 1.5, title.position = "top", direction = "horizontal"))
+TPLT +
+  theme(legend.position = "bottom", axis.title = element_blank(), axis.text = element_text(size = 10, face = "italic"), panel.background = element_rect(fill = "grey20", color = "grey20"))
+```
+
+Here, we look at the different ways to meddle with theme (to create a terrible looking plot).
+  1)`legend.position` - this just requires a direction (e.g., "top", "left") or coordinates (e.g., `c(1, 2)`)
+  2) `element_blank` - this function tells ggplot to get rid of this element
+  3) `element_text` - for text based theme arguments (e.g., axis.text, legend.title, etc.), this allows for modifying size, font, font type, color, etc.
+  4) `element_rect` - this does the same thing as `element_text` but for "shapes" like the plot background and allows modifying fill (don't want a fill? use NA or "transparent"), color (color affects "lines"), alpha, etc.
+  
+## Step 5: What else??? 
+
+### Mapping spatial data
+
+Spatial data in R mainly works via three packages: `raster`, `sp`, and `sf`. These allow you to work with raster data (often how things like climate data, elevation, land cover, etc. are stored) and with vector data (things like polygons, lines, etc. detailing an object in space, its boundaries, and its data).
+
+The `raster` package has multiple ways for you to easily get some spatial data via GDAL. Check out `help(raster::getData)` for more info on where it is grabbing these data from and what options are available for you. 
+
+```{r, warning = F, message = F}
+BORD <- raster::getData(country = "USA", level = 2)
+BORD <- BORD[BORD$NAME_1 == "Texas", ]
+ELEV <- raster::getData("alt", country = "USA", mask = T)
+ELEV <- mask(crop(ELEV[[1]], BORD), BORD)
+ELEV <- data.frame(rasterToPoints(ELEV))
+```
+
+Here, we grabbed county level data for the entire US and then subsetted this `spatialPolygonDataFrame` to grab only data from the great Republic of Texas. We also grabbed elevation data for the entire US (held as a `raster` object), cropped this to the extent of Texas, and then clipped it to our remaining county data.
+
+Finally, we turned the raster into a series of points and then further turned this into a data.frame. Check out `head(ELEV)` to see how this has changed.
+
+```{r}
+ggplot() +
+  geom_tile(data = ELEV, aes(x = x, y = y, fill = USA1_msk_alt)) +
+  geom_polygon(data = BORD, aes(x = long, y = lat, group = group), fill = NA, color = "white", size = 0.1) +
+  scale_fill_viridis_c(name = "Elevation") + 
+  coord_fixed() +
+  theme(panel.background = element_rect(fill = "grey30"), panel.grid = element_blank())
+```
+
+```{r}
+BORD <- as(BORD, "sf")
+ggplot() + geom_tile(data = ELEV, aes(x = x, y = y, fill = USA1_msk_alt)) +
+  geom_sf(data = BORD, fill = NA, color = "white", size = 0.1) +
+  scale_fill_viridis_c(name = "Elevation") + 
+  theme(panel.background = element_rect(fill = "grey30"), panel.grid = element_blank())
+```
+
+### Multiple panels
+
+There are multiple packages and ways to make multipanel figures, but today I will talk about `cowplot` (`ggplot2::facetwrap` is another good function to check it if you like that aesthetic)
+
+`facetwrap` works by giving the `ggplot2::facet_wrap` function the variable you want to split up the plots by (below shown with `~transect`).
+
+```{r}
+ggplot(data = DATA, aes(x = sciname, y = weight, fill = treatment)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(shape = 21, position = position_jitterdodge()) +
+  facet_wrap(~transect)
+```
+
+Now, `cowplot` has some aesthetic opinions on how plots should look, so you will see the plot theme change suddenly. However, it is great for making multipanel figures (you can add panel labels!) and having a great deal of control on things like columns, rows, and relative sizes of each plot.
+
+```{r, fig.width = 10, fig.height = 5}
+library(cowplot)
+plot_grid(PLT, TPLT + theme(legend.position = "bottom"), labels = c("A", "B"), nrow = 1, label_size = 24)
+plot_grid(PLT + theme(legend.position = c(0.7, 0.7)), TPLT + theme(legend.position = "bottom"), labels = c("A", "B"), nrow = 1, label_size = 24, rel_widths = c(1, 0.75))
+```
+
+Two more things that are useful in `cowplot` are the ability to plot every element of a list (say you need to plot 25 things for a single figure for some reason *shifty eyes emoji*) which makes plotting large amounts of data easier and cleaner and the ability to grab a legend from a single plot (using the `cowplot::get_legend` function) and make it the only legend used for the entire figure.
+
+```{r, fig.width = 8, fig.height = 6}
+STAB <- lapply(levels(DATA$season), function(x) dplyr::filter(DATA, season == x))
+STAB <- lapply(STAB, function(x) data.frame(table(x$sciname, x$transect)))
+sapply(STAB, function(x) max(x$Freq))
+STPT <- lapply(STAB, function(x) ggplot(data = x, aes(x = Var1, y = Var2, fill = Freq)) + 
+  geom_tile(color = "white", size = 1) +
+  scale_fill_viridis_c(name = "Count", limit = c(0, 90), breaks = seq(0, 90, 15)) +
+  geom_text(aes(label = Freq), color = "grey70", fontface = "bold", size = 5) +
+  labs(x = "Species", y = "Transect") +
+  scale_x_discrete(expand = c(0, 0)) +
+  scale_y_discrete(expand = c(0, 0)) +
+  guides(fill = guide_colorbar(ticks = F, barwidth = 16, barheight = 1.5, title.position = "top", direction = "horizontal")) +
+  theme(legend.position = "bottom", legend.justification = "center"))
+LEG <- get_legend(STPT[[1]])
+STPT <- lapply(STPT, function(x) x + theme(legend.position = "none"))
+SEAS <- plot_grid(plotlist = STPT, nrow = 2, labels = c("A", "B", "C", "D"))
+SEAS
+plot_grid(SEAS, LEG, ncol = 1, rel_heights = c(1, 0.2))
+```
+
+### `gghighlight`
+
+Are you making figures for a presentation and need to highlight specific portions of your data? Meet the `gghighlight` package, which is aptly named.
+
+```{r, fig.width = 5, fig.height = 5, warning = F}
+TPLT <- TPLT + theme(legend.position = "bottom")
+TPLT + gghighlight(Freq >= 100)
+TPLT + gghighlight(Var2 %in% c("T1", "T2"))
+TPLT + gghighlight(Var2 %in% c("T1", "T2") & Var1 == "shis")
+```
+
+You can specify highlighting rules based on the fill variable and/or based on either (or both!) of the axes.
+
+Also, if you like to live dangerously, the developmental version of `gghighlight` via github allows you to mess with how unhighlighted objects appear with the `unhighlighted_params` argument if you don't like the default.
+
+```{r, fig.width = 5, fig.height = 5}
+#install.packages("devtools")
+#devtools::install_github("yutannihilation/gghighlight")
+TPLT + gghighlight(Freq >= 100, unhighlighted_params = list(fill = "grey50", color = "white"))
+```
+
+### `gganimate`
+
+Do you really want to destroy your advisor's faith in you by filling up an entire presentation with gifs? Well, welcome to the `gganimate` package. 
+
+Essentially you will create a plot as normal, but you animate it according to the `gganimate::transition_states` function to which you give the variable that you are having the plot iterate through and `transition_length` and `state_length` arguments that dictate how long it takes to iterate and how long each iteration appears, respectively. 
+
+There are various other functions used to dictate how states will appear and disappear (here, I used `enter_fade` and `exit_fade`), so you too can create your own Tom Hooper-esque assault on taste. 
+
+```{r}
+ANIM <- ggplot(data = DATA, aes(x = sciname, y = weight, fill = treatment)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(shape = 21, alpha = 0.5, position = position_jitterdodge()) +
+  scale_x_discrete(name = "Species", limits = rev(levels(DATA$sciname)), labels = c("S. hispidus", "R. fulvescens", "P. leucopus", "C. hispidus", "B. taylori")) + 
+  scale_fill_manual(name = "Treatment", values = COLS, position = "bottom") +
+labs(y = "Weight (g)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.95), legend.position = c(0.7, 0.7))
+
+ANIM + 
+  transition_states(season, transition_length = 2, state_length = 1) +
+  enter_fade() +
+  exit_fade() +
+  labs(title = "{closest_state}")
+#anim_save("example.gif")
+```
+
+Additionally, if you want to save an animation as a gif, you can use the `anim_save` function. 
+
+For more information on `gganimate`, see the [github page for the package](https://github.com/thomasp85/gganimate).
+
+### `ggsave`
+
+We haven't talked about saving plots even though it is one of the most important parts of plotting. 
+
+The main method used in ggplot2 is `ggsave`, which is ideal for most purposes by default as it saves the last thing you plotted, takes a wide variety of formats (pdf, eps, png, etc.), saves in 300 dpi by default, and saves according to the dimensions its plotted in originally.
+
+This last part can be concerning with large plots, so I typically will set the plot dimensions manually by using the `width` and `height` arguments
+
+By default, `ggplot2::ggsave` saves the most recent plot you brought up (you can also give it a plot object in the plot argument) at the dimensions that it occurs and in your working directory. You can adjust dpi, width, and height in here as well if need be.
+
+```{r, eval = F}
+PLT
+ggsave(PLT, "example.pdf")
+ggsave(PLT, "example.pdf", width = 5, height = 4)
+ggsave(SEAS, "example2.png")
+ggsave(SEAS, "example2.png", width = 8, height = 8)
+```
+
+For more information, check `?ggsave`
+
+No, for real. The help pages in R are invaluable. Most questions that people ask me are either solvable by taking the time to read the function help page or googling an error code (or things being the wrong class).
